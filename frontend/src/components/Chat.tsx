@@ -32,7 +32,6 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
 
   const renderMessage = (message: ChatMessage) => {
     const isUser = message.role === 'user';
-    const isSystem = message.role === 'system';
 
     return (
       <Box
@@ -40,20 +39,29 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
           display: 'flex',
           justifyContent: isUser ? 'flex-end' : 'flex-start',
           mb: 2,
+          maxWidth: '80%',
+          marginLeft: isUser ? 'auto' : '0',
+          marginRight: isUser ? '0' : 'auto',
         }}
       >
         <Paper
           sx={{
             p: 2,
-            maxWidth: '70%',
-            backgroundColor: isSystem
-              ? 'warning.dark'
-              : isUser
-              ? 'primary.dark'
-              : 'background.paper',
+            bgcolor: isUser ? 'primary.dark' : 'background.paper',
+            borderRadius: 2,
+            width: '100%',
           }}
         >
-          <Typography>{message.content}</Typography>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.6
+            }}
+          >
+            {message.content}
+          </Typography>
           {message.images?.map((image, index) => (
             <Box
               key={index}
@@ -61,10 +69,11 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
               src={image}
               alt={`Image ${index + 1}`}
               sx={{
-                mt: 1,
+                mt: 2,
                 maxWidth: '100%',
                 height: 'auto',
                 borderRadius: 1,
+                display: 'block',
               }}
             />
           ))}
@@ -74,18 +83,37 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
   };
 
   return (
-    <Paper
-      sx={{
+    <Box 
+      sx={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         display: 'flex',
         flexDirection: 'column',
-        height: '70vh',
+        overflow: 'hidden',
       }}
     >
       <Box
         sx={{
           flex: 1,
           overflowY: 'auto',
-          p: 2,
+          p: 3,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          bgcolor: 'background.default',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            bgcolor: 'background.default',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            bgcolor: 'primary.main',
+            borderRadius: '4px',
+          },
         }}
       >
         {messages.map((message, index) => (
@@ -100,27 +128,45 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
           p: 2,
           borderTop: 1,
           borderColor: 'divider',
-          display: 'flex',
-          gap: 1,
+          bgcolor: 'background.paper',
+          flexShrink: 0,
         }}
       >
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Type your message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={isProcessing}
-        />
-        <IconButton
-          type="submit"
-          color="primary"
-          disabled={!input.trim() || isProcessing}
-        >
-          {isProcessing ? <CircularProgress size={24} /> : <SendIcon />}
-        </IconButton>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Type your message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            disabled={isProcessing}
+            size="small"
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: 'background.paper',
+              }
+            }}
+          />
+          <IconButton
+            type="submit"
+            color="primary"
+            disabled={!input.trim() || isProcessing}
+            sx={{ 
+              p: 1,
+              bgcolor: 'primary.main',
+              '&:hover': {
+                bgcolor: 'primary.dark',
+              },
+              '&.Mui-disabled': {
+                bgcolor: 'action.disabledBackground',
+              }
+            }}
+          >
+            {isProcessing ? <CircularProgress size={24} /> : <SendIcon />}
+          </IconButton>
+        </Box>
       </Box>
-    </Paper>
+    </Box>
   );
 };
 

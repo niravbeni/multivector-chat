@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import {
   Box,
-  Container,
   CssBaseline,
   ThemeProvider,
   createTheme,
 } from '@mui/material'
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 import { ChatMessage } from './types'
 import FileUpload from './components/FileUpload'
 import Chat from './components/Chat'
@@ -31,12 +30,12 @@ function App() {
     formData.append('file', file)
 
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/upload`, formData, {
+      const response = await axios.post(`${BACKEND_URL}/api/extract`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
-      const { summary, content } = response.data
+      const { text, images } = response.data
 
       setMessages([
         {
@@ -45,18 +44,19 @@ function App() {
         },
         {
           role: 'assistant',
-          content: `Here's a summary of the document: ${summary}`,
-          images: content.images || [],
+          content: text,
+          images: images || [],
         },
       ])
 
       setIsFileUploaded(true)
-    } catch (error: any) {
-      console.error('Error uploading file:', error)
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError<{ detail: string }>
+      console.error('Error uploading file:', axiosError)
       setMessages([
         {
           role: 'system',
-          content: `Error processing document: ${error.response?.data?.detail || error.message}`,
+          content: `Error processing document: ${axiosError.response?.data?.detail || axiosError.message}`,
         },
       ])
     } finally {
@@ -93,13 +93,14 @@ function App() {
           content: response.data.response,
         },
       ])
-    } catch (error: any) {
-      console.error('Error sending message:', error)
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError<{ detail: string }>
+      console.error('Error sending message:', axiosError)
       setMessages((prevMessages) => [
         ...prevMessages,
         {
           role: 'system',
-          content: `Error processing message: ${error.response?.data?.detail || error.message}`,
+          content: `Error processing message: ${axiosError.response?.data?.detail || axiosError.message}`,
         },
       ])
     } finally {
@@ -110,24 +111,47 @@ function App() {
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <Container maxWidth="md">
-        <Box
+      <Box 
+        sx={{ 
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.default',
+          overflow: 'hidden'
+        }}
+      >
+        <Box 
           sx={{
-            minHeight: '100vh',
-            py: 4,
+            width: '90%',
+            maxWidth: '800px',
+            height: '90%',
             display: 'flex',
             flexDirection: 'column',
             gap: 2,
+            p: 2,
           }}
         >
-          <FileUpload onFileUpload={handleFileUpload} isProcessing={isProcessing} />
-          <Chat
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isProcessing={isProcessing}
-          />
+          <Box sx={{ flexShrink: 0 }}>
+            <FileUpload onFileUpload={handleFileUpload} isProcessing={isProcessing} />
+          </Box>
+          <Box sx={{ 
+            flex: 1,
+            minHeight: 0, // Important for proper flex behavior
+            position: 'relative',
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+            boxShadow: 3
+          }}>
+            <Chat
+              messages={messages}
+              onSendMessage={handleSendMessage}
+              isProcessing={isProcessing}
+            />
+          </Box>
         </Box>
-      </Container>
+      </Box>
     </ThemeProvider>
   )
 }

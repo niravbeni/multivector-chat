@@ -120,7 +120,7 @@ def extract_content_from_pdf(file_path: str) -> Dict[str, Any]:
         logger.info(f"Extracted {len(images)} visual elements (images/tables)")
         
         return {
-            "text": "\n".join(text_content),
+            "text": "\n\n".join(text_content),  # Use double newlines to preserve paragraphs
             "images": images
         }
     except Exception as e:
