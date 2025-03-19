@@ -26,50 +26,41 @@ app.add_middleware(
 
 # Storage for document content
 class DocumentSection:
-    def __init__(self, content: str, page_num: int, section_type: str, metadata: Optional[Union[Dict[str, Any], ElementMetadata]] = None):
+    def __init__(self, content: str, page_num: int, section_type: str, metadata: Any):
         self.content = content
         self.page_num = page_num
         self.section_type = section_type
-        if metadata is None:
-            self.metadata = {}
-        elif isinstance(metadata, ElementMetadata):
-            self.metadata = metadata.__dict__ if hasattr(metadata, '__dict__') else {}
-        elif isinstance(metadata, dict):
-            self.metadata = metadata
-        else:
-            self.metadata = {}
+        self.metadata = metadata
 
 class DocumentStore:
     def __init__(self):
         self.sections: List[DocumentSection] = []
         self.images: List[Dict[str, Any]] = []
         self.tables: List[Dict[str, Any]] = []
-        
+        self.current_document: str = ""  # Add document name tracking
+
+    def clear(self):
+        self.sections = []
+        self.images = []
+        self.tables = []
+        self.current_document = ""
+
+    def set_current_document(self, filename: str):
+        self.current_document = filename
+
     def add_section(self, section: DocumentSection):
         self.sections.append(section)
         
-    def add_image(self, image_data: str, page_num: int, metadata: Optional[Union[Dict[str, Any], ElementMetadata]] = None):
-        metadata_dict = {}
-        if metadata is not None:
-            if isinstance(metadata, ElementMetadata):
-                metadata_dict = metadata.__dict__ if hasattr(metadata, '__dict__') else {}
-            elif isinstance(metadata, dict):
-                metadata_dict = metadata
-                
+    def add_image(self, image_data: str, page_num: int, metadata: Union[Dict[str, Any], ElementMetadata]):
+        metadata_dict = metadata.__dict__ if isinstance(metadata, ElementMetadata) else metadata
         self.images.append({
             "data": image_data,
             "page_num": page_num,
             "metadata": metadata_dict
         })
         
-    def add_table(self, table_data: str, page_num: int, metadata: Optional[Union[Dict[str, Any], ElementMetadata]] = None):
-        metadata_dict = {}
-        if metadata is not None:
-            if isinstance(metadata, ElementMetadata):
-                metadata_dict = metadata.__dict__ if hasattr(metadata, '__dict__') else {}
-            elif isinstance(metadata, dict):
-                metadata_dict = metadata
-                
+    def add_table(self, table_data: str, page_num: int, metadata: Union[Dict[str, Any], ElementMetadata]):
+        metadata_dict = metadata.__dict__ if isinstance(metadata, ElementMetadata) else metadata
         self.tables.append({
             "data": table_data,
             "page_num": page_num,
@@ -107,9 +98,15 @@ def extract_content_from_pdf(file_path: str) -> None:
             extract_image_block_to_payload=True  # Extract images as base64
         )
         
-        # Clear previous document store
+        # Get the filename from the path
+        filename = os.path.basename(file_path)
+        if filename.startswith('temp_'):  # Remove the temp_ prefix if present
+            filename = filename[5:]
+            
+        # Clear previous document store and set the current document
         global document_store
-        document_store = DocumentStore()
+        document_store.clear()
+        document_store.set_current_document(filename)
         
         for element in elements:
             # Get page number with fallback to 1 if not available
@@ -344,7 +341,7 @@ async def extract_file(file: UploadFile):
         logger.info(f"Successfully saved file to {temp_path}")
         
         # Process the PDF
-        extract_content_from_pdf(temp_path)
+        extract_content_from_pdf(temp_path)  # The function will handle setting the document name
         
         # Only return a summary of what was extracted
         return {
@@ -355,7 +352,7 @@ async def extract_file(file: UploadFile):
                     "content": section.content,
                     "page": section.page_num,
                     "type": section.section_type,
-                    "source": file.filename
+                    "source": document_store.current_document  # Use the stored document name
                 }
                 for section in document_store.sections[:3]  # First 3 sections as preview
             ]
@@ -401,15 +398,15 @@ async def chat(request: ChatRequest):
                 tables=[]
             )
         
-        # Format the response with citations
+        # Format the response with citations including document name
         response_parts = []
         citations = []
         relevant_pages = set()
         
         for section in context:
             if section["content"].strip():
-                citation = f"Page {section['page']}"
-                response_parts.append(f"{section['content']} [Citation: {citation}]")
+                citation = f"[Source: {document_store.current_document}, Page {section['page']}]"
+                response_parts.append(f"{section['content']} {citation}")
                 citations.append(citation)
                 relevant_pages.add(section["page"])
         
@@ -428,7 +425,7 @@ async def chat(request: ChatRequest):
                 for img in document_store.images 
                 if img["page_num"] in relevant_pages
             ]
-            logger.info(f"Including {len(relevant_images)} relevant images")
+            logger.info(f"Including {len(relevant_images)} relevant images from {document_store.current_document}")
         
         if include_tables:
             relevant_tables = [
@@ -436,9 +433,9 @@ async def chat(request: ChatRequest):
                 for table in document_store.tables 
                 if table["page_num"] in relevant_pages
             ]
-            logger.info(f"Including {len(relevant_tables)} relevant tables")
+            logger.info(f"Including {len(relevant_tables)} relevant tables from {document_store.current_document}")
         
-        logger.info(f"Returning response with context from {len(relevant_pages)} pages")
+        logger.info(f"Returning response with context from {len(relevant_pages)} pages of {document_store.current_document}")
         
         return Message(
             role="assistant",
