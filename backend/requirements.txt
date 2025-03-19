@@ -5,4 +5,4 @@ unstructured[all-docs]==0.12.4
 pillow==10.2.0
 lxml==5.1.0
 python-magic==0.4.27
-python-magic-bin==0.4.14 
+python-magic-bin==0.4.14

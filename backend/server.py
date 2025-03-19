@@ -1,25 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import logging
+import os
+from typing import Dict, List, Any
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from unstructured.partition.pdf import partition_pdf
-from unstructured.partition.text import partition_text
-from unstructured.documents.elements import Image, Table, Text, Element
-from langchain_openai import ChatOpenAI
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains.summarize import load_summarize_chain
-from langchain.docstore.document import Document
-import os
-import tempfile
-from typing import List, Dict, Optional, Any, Union
-from pydantic import BaseModel
-import logging
-from dotenv import load_dotenv
-import base64
-from io import BytesIO
-from PIL import Image as PILImage
-import numpy as np
-
-# Load environment variables
-load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,49 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Check for OpenAI API key
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("OPENAI_API_KEY environment variable is not set. Please set it in your .env file.")
-
-# Initialize OpenAI model
-chat_model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
-
-def convert_image_to_base64(image_data: Union[str, bytes, np.ndarray, None]) -> str:
-    """Convert image data to base64 string."""
-    if image_data is None:
-        return ""
-    
-    try:
-        if isinstance(image_data, str):
-            # If it's a file path
-            with PILImage.open(image_data) as img:
-                buffered = BytesIO()
-                img.save(buffered, format=img.format or 'PNG')
-                img_str = base64.b64encode(buffered.getvalue()).decode()
-                return f"data:image/{img.format.lower() if img.format else 'png'};base64,{img_str}"
-        elif isinstance(image_data, bytes):
-            # If it's bytes data
-            img_str = base64.b64encode(image_data).decode()
-            return f"data:image/png;base64,{img_str}"
-        elif isinstance(image_data, np.ndarray):
-            # If it's a numpy array
-            img = PILImage.fromarray(image_data)
-            buffered = BytesIO()
-            img.save(buffered, format='PNG')
-            img_str = base64.b64encode(buffered.getvalue()).decode()
-            return f"data:image/png;base64,{img_str}"
-        return ""
-    except Exception as e:
-        logger.error(f"Error converting image to base64: {str(e)}")
-        return ""
 
 def extract_content_from_pdf(file_path: str) -> Dict[str, Any]:
     """Extract text and other content from PDF using unstructured library."""
@@ -214,17 +155,6 @@ async def extract_from_pdf(file: UploadFile = File(...)):
         logger.error(f"Error processing upload: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/chat")
-async def chat(request: ChatRequest):
-    """Handle chat messages."""
-    try:
-        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        response = chat_model.invoke(messages)
-        return {"response": response.content}
-    except Exception as e:
-        logger.error(f"Error in chat: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3001) 
+    uvicorn.run(app, host="0.0.0.0", port=3001)
