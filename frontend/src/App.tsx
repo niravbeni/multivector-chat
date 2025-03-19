@@ -35,7 +35,7 @@ function App() {
           'Content-Type': 'multipart/form-data',
         },
       })
-      const { text, images } = response.data
+      const { message } = response.data
 
       setMessages([
         {
@@ -44,8 +44,7 @@ function App() {
         },
         {
           role: 'assistant',
-          content: text,
-          images: images || [],
+          content: message,
         },
       ])
 
@@ -76,21 +75,36 @@ function App() {
       return
     }
 
+    // Add user message to UI immediately
     setMessages([...messages, { role: 'user', content: message }])
     setIsProcessing(true)
 
     try {
+      // Format messages for the backend, excluding system messages
+      const chatMessages = messages
+        .filter(msg => msg.role !== 'system')
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          ...(msg.images && { images: msg.images }),
+          ...(msg.tables && { tables: msg.tables })
+        }))
+
+      // Add the new user message
+      chatMessages.push({ role: 'user', content: message })
+
       const response = await axios.post(`${BACKEND_URL}/api/chat`, { 
-        messages: [
-          ...messages.filter(msg => msg.role !== 'system'),
-          { role: 'user', content: message }
-        ]
+        messages: chatMessages
       })
+
+      // Add assistant's response to UI
       setMessages((prevMessages) => [
         ...prevMessages,
         {
-          role: 'assistant',
-          content: response.data.response,
+          role: response.data.role,
+          content: response.data.content,
+          images: response.data.images || [],
+          tables: response.data.tables || []
         },
       ])
     } catch (error: unknown) {

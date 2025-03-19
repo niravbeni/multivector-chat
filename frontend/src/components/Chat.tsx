@@ -62,20 +62,50 @@ const Chat = ({ messages, onSendMessage, isProcessing }: ChatProps) => {
           >
             {message.content}
           </Typography>
-          {message.images?.map((image, index) => (
+          
+          {/* Display Tables */}
+          {message.tables?.map((table, index) => (
             <Box
-              key={index}
-              component="img"
-              src={image}
-              alt={`Image ${index + 1}`}
+              key={`table-${index}`}
               sx={{
                 mt: 2,
-                maxWidth: '100%',
-                height: 'auto',
-                borderRadius: 1,
-                display: 'block',
+                overflowX: 'auto',
+                '& table': {
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  '& th, & td': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    p: 1,
+                    textAlign: 'left',
+                  },
+                },
               }}
+              dangerouslySetInnerHTML={{ __html: table }}
             />
+          ))}
+          
+          {/* Display Images */}
+          {message.images?.map((image, index) => (
+            <Box
+              key={`image-${index}`}
+              sx={{
+                mt: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <img
+                src={`data:image/png;base64,${image}`}
+                alt={`Image ${index + 1}`}
+                style={{
+                  maxWidth: '100%',
+                  height: 'auto',
+                  borderRadius: '4px',
+                }}
+              />
+            </Box>
           ))}
         </Paper>
       </Box>

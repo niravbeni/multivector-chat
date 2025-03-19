@@ -2,6 +2,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   images?: string[];
+  tables?: string[];
 }
 
 export interface FileUploadProps {
