@@ -9,6 +9,8 @@ from unstructured.documents.elements import (
     Text, Title, NarrativeText, ListItem, Table, Image, ElementMetadata
 )
 
+from rag_handler import RAGHandler
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize RAG handler
+rag_handler = RAGHandler()
 
 # Storage for document content
 class DocumentSection:
@@ -229,7 +234,18 @@ def extract_content_from_pdf(file_path: str) -> None:
                         metadata=element.metadata
                     ))
                     
-        logger.info("Content extraction completed successfully")
+        # Process extracted content with RAG
+        rag_handler.process_document(
+            texts=[{
+                "content": section.content,
+                "page_num": section.page_num,
+                "type": section.section_type
+            } for section in document_store.sections],
+            tables=document_store.tables,
+            images=document_store.images
+        )
+        
+        logger.info("Content extraction and RAG processing completed successfully")
         logger.info(f"Extracted {len(document_store.sections)} sections, {len(document_store.images)} images, and {len(document_store.tables)} tables")
         
     except Exception as e:
@@ -386,11 +402,11 @@ async def chat(request: ChatRequest):
         
         logger.info(f"Processing user message: {user_message}")
         
-        # Get relevant context for the question
-        context = document_store.get_context_for_query(user_message)
+        # Get relevant content using RAG
+        relevant_content = rag_handler.get_relevant_content(user_message)
         
-        if not context:
-            logger.warning("No relevant context found for the query")
+        if not relevant_content["texts"]:
+            logger.warning("No relevant content found for the query")
             return Message(
                 role="assistant",
                 content="I don't have enough context to answer your question. Please try asking something else or upload a document first.",
@@ -398,50 +414,28 @@ async def chat(request: ChatRequest):
                 tables=[]
             )
         
-        # Format the response with citations including document name
+        # Format the response with citations
         response_parts = []
-        citations = []
-        relevant_pages = set()
         
-        for section in context:
-            if section["content"].strip():
-                citation = f"[Source: {document_store.current_document}, Page {section['page']}]"
-                response_parts.append(f"{section['content']} {citation}")
-                citations.append(citation)
-                relevant_pages.add(section["page"])
+        for text in relevant_content["texts"]:
+            citation = f"[Source: {document_store.current_document}, Page {text['page']}]"
+            response_parts.append(f"{text['content']} {citation}")
         
-        # Check if the query is asking about images or tables
+        # Get images and tables based on the query context
         query_lower = user_message.lower()
         include_images = any(term in query_lower for term in ['image', 'picture', 'figure', 'diagram', 'graph', 'show me', 'visual'])
         include_tables = any(term in query_lower for term in ['table', 'data', 'values', 'rows', 'columns', 'entries'])
         
-        # Include images and tables only if requested or if they're on the same page as relevant text
-        relevant_images = []
-        relevant_tables = []
+        relevant_images = relevant_content["images"] if include_images else []
+        relevant_tables = relevant_content["tables"] if include_tables else []
         
-        if include_images:
-            relevant_images = [
-                img["data"]
-                for img in document_store.images 
-                if img["page_num"] in relevant_pages
-            ]
-            logger.info(f"Including {len(relevant_images)} relevant images from {document_store.current_document}")
-        
-        if include_tables:
-            relevant_tables = [
-                table["data"]
-                for table in document_store.tables 
-                if table["page_num"] in relevant_pages
-            ]
-            logger.info(f"Including {len(relevant_tables)} relevant tables from {document_store.current_document}")
-        
-        logger.info(f"Returning response with context from {len(relevant_pages)} pages of {document_store.current_document}")
+        logger.info(f"Returning response with {len(relevant_images)} images and {len(relevant_tables)} tables")
         
         return Message(
             role="assistant",
             content="\n\n".join(response_parts),
-            images=relevant_images,
-            tables=relevant_tables
+            images=[img["data"] for img in relevant_images],
+            tables=[table["data"] for table in relevant_tables]
         )
         
     except Exception as e:
